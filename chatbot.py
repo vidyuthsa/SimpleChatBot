@@ -3,14 +3,24 @@ from google import genai
 import speech_recognition as sr
 import pyttsx3
 import os
+from datetime import datetime
 
 # Initialize Page UI
 st.set_page_config(page_title="Gemini Voice Chatbot", page_icon="🎙️")
 st.title("🎙️ Gemini Voice & Web Chatbot")
-st.write("Talk or type! Your voice features are fully integrated.")
+st.write("Talk or type! This version features active conversation memory.")
 
 # Initialize Gemini Client
 client = genai.Client()
+
+# --- CHAT MEMORY CORE SETUP ---
+# We store the active chat session in Streamlit's session_state so it survives page re-runs
+if "chat_session" not in st.session_state:
+    st.session_state.chat_session = client.chats.create(model="gemini-2.5-flash")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+# ------------------------------
 
 # Initialize Text-to-Speech Engine
 @st.cache_resource
@@ -21,13 +31,8 @@ def get_tts_engine():
 tts_engine = get_tts_engine()
 
 def speak_text(text):
-    # This keeps your bot speaking out loud
     tts_engine.say(text)
     tts_engine.runAndWait()
-
-# Initialize Chat Session History
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
 # Display past chat bubbles
 for message in st.session_state.messages:
@@ -44,8 +49,6 @@ if st.sidebar.button("🎙️ Click to Speak"):
             audio = recognizer.listen(source, timeout=5)
             st.sidebar.success("Processing voice...")
             user_voice_text = recognizer.recognize_google(audio)
-            
-            # Insert the voice text into the input flow
             st.session_state.voice_input = user_voice_text
         except Exception as e:
             st.sidebar.error("Could not understand audio or microphone timed out.")
@@ -54,7 +57,7 @@ if st.sidebar.button("🎙️ Click to Speak"):
 user_input = st.chat_input("Type your message here...")
 if "voice_input" in st.session_state and st.session_state.voice_input:
     user_input = st.session_state.voice_input
-    del st.session_state.voice_input  # Clear it for the next round
+    del st.session_state.voice_input  # Clear it
 
 # Process the message if we have input
 if user_input:
@@ -63,18 +66,25 @@ if user_input:
         st.markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
     
-    # 2. Get AI Response
+    # 2. Get AI Response via the persistent Chat Session
     with st.chat_message("assistant"):
         try:
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=user_input
-            )
+            # NOTICE: We use st.session_state.chat_session.send_message instead of client.models.generate_content
+            response = st.session_state.chat_session.send_message(user_input)
             bot_response = response.text
+            
             st.markdown(bot_response)
             st.session_state.messages.append({"role": "assistant", "content": bot_response})
             
-            # 3. Speak the response out loud!
+            # 3. File Logging
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open("chat_history.txt", "a") as f:
+                f.write(f"[{timestamp}]\n")
+                f.write(f"User: {user_input}\n")
+                f.write(f"Bot: {bot_response}\n")
+                f.write("-" * 50 + "\n\n")
+
+            # 4. Speak response
             speak_text(bot_response)
             
         except Exception as e:
