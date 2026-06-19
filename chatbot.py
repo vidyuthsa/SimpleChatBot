@@ -8,19 +8,23 @@ from datetime import datetime
 # Initialize Page UI
 st.set_page_config(page_title="Gemini Voice Chatbot", page_icon="🎙️")
 st.title("🎙️ Gemini Voice & Web Chatbot")
-st.write("Talk or type! This version features active conversation memory.")
+st.write("Talk or type! This version keeps the client alive for smooth context memory.")
 
-# Initialize Gemini Client
-client = genai.Client()
+# --- PERSISTENT CLIENT & CHAT SETUP ---
+# Cache the client so it doesn't close between message turns
+@st.cache_resource
+def get_gemini_client():
+    return genai.Client()
 
-# --- CHAT MEMORY CORE SETUP ---
-# We store the active chat session in Streamlit's session_state so it survives page re-runs
+client = get_gemini_client()
+
+# Store the chat session using the cached client
 if "chat_session" not in st.session_state:
     st.session_state.chat_session = client.chats.create(model="gemini-2.5-flash")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
-# ------------------------------
+# --------------------------------------
 
 # Initialize Text-to-Speech Engine
 @st.cache_resource
@@ -69,7 +73,6 @@ if user_input:
     # 2. Get AI Response via the persistent Chat Session
     with st.chat_message("assistant"):
         try:
-            # NOTICE: We use st.session_state.chat_session.send_message instead of client.models.generate_content
             response = st.session_state.chat_session.send_message(user_input)
             bot_response = response.text
             
