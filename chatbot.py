@@ -5,14 +5,22 @@ import pyttsx3
 import os
 import threading
 from datetime import datetime
+from dotenv import load_dotenv
+
+# --- CRITICAL SECURITY UPGRADE ---
+# Automatically searches for and loads keys from your hidden .env file
+load_dotenv()
+
+# Verify that the API key is successfully found in the environment variables
+if not os.getenv("GEMINI_API_KEY"):
+    st.error("🔒 Security Alert: GEMINI_API_KEY missing! Create a '.env' file locally or check your environment setup.")
 
 # Initialize Page UI Configuration
 st.set_page_config(page_title="Gemini Pro Chatbot", page_icon="🚀", layout="wide")
 st.title("🚀 Advanced Gemini Voice & Web Hub")
-st.write("An optimized B.Tech project featuring context memory, diagnostics, and voice controls.")
+st.write("An optimized B.Tech project featuring context memory, file logging, and secure credential handling.")
 
 # --- PERSISTENT CLIENT & CHAT SETUP ---
-# Initializes using the GEMINI_API_KEY environment variable you set in your terminal
 @st.cache_resource
 def get_gemini_client():
     return genai.Client()
@@ -30,7 +38,7 @@ if "chat_session" not in st.session_state:
 # Sidebar Controls Configuration
 st.sidebar.title("⚙️ Control Panel")
 
-# --- OPTION 0: CLEAR CHAT LOGIC ---
+# OPTION 0: CLEAR CHAT LOGIC
 if st.sidebar.button("🗑️ Clear Conversation", use_container_width=True):
     st.session_state.messages = []
     # Re-instantiate the session to clear memory history on Gemini's backend too
@@ -86,7 +94,7 @@ if st.sidebar.button("🎙️ Click to Speak", use_container_width=True):
 
 st.sidebar.markdown("---")
 
-# --- SERVER DEMAND DIAGNOSTIC TOOL ---
+# Server Demand Diagnostic Tool
 st.sidebar.subheader("API Status Monitor")
 if st.sidebar.button("📊 Diagnostics: Check Demand", use_container_width=True):
     with st.sidebar.spinner("Pinging Gemini servers..."):
@@ -98,9 +106,7 @@ if st.sidebar.button("📊 Diagnostics: Check Demand", use_container_width=True)
             if test_response.text:
                 st.sidebar.success("🟢 API Status: Normal (Low Demand)")
         except Exception as e:
-            if "429" in str(e):
-                st.sidebar.error("🔴 API Status: Quota Exhausted (429 Spike)")
-            elif "503" in str(e):
+            if "503" in str(e):
                 st.sidebar.error("🔴 API Status: High Demand (503 Spikes)")
             else:
                 st.sidebar.warning("🟡 API Status: Delayed / Latency Detected")
@@ -134,4 +140,12 @@ if user_input:
             st.session_state.messages.append({"role": "assistant", "content": bot_response})
             
             # 3. File Logging
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open("chat_history.txt", "a") as f:
+                f.write(f"[{timestamp}]\nUser: {user_input}\nBot: {bot_response}\n{'-'*50}\n\n")
+
+            # 4. Speak response out loud
+            speak_text(bot_response)
+            
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
