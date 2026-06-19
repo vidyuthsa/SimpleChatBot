@@ -17,7 +17,7 @@ if not os.getenv("GEMINI_API_KEY"):
 
 # Initialize Page UI Configuration
 st.set_page_config(page_title="Gemini Pro Chatbot", page_icon="🚀", layout="wide")
-st.title("🚀 Advanced Gemini Voice & Web Hub")
+st.title("Gemini Voice & Web Hub")
 st.write("An optimized B.Tech project featuring context memory, file logging, and secure credential handling.")
 
 # --- PERSISTENT CLIENT & CHAT SETUP ---
