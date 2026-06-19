@@ -1,82 +1,81 @@
-import os
-import datetime
-import sys
+import streamlit as st
+from google import genai
 import speech_recognition as sr
 import pyttsx3
-from google import genai
+import os
 
-# Smart Cross-Platform Speech Initialization
-try:
-    # If running on a Mac, explicitly use the native macOS speech driver
-    if sys.platform == "darwin":
-        tts_engine = pyttsx3.init(driverName='nsss')
-    else:
-        tts_engine = pyttsx3.init() # Automatically chooses SAPI5 on Windows / Espeak on Linux
-except Exception:
-    tts_engine = pyttsx3.init()
+# Initialize Page UI
+st.set_page_config(page_title="Gemini Voice Chatbot", page_icon="🎙️")
+st.title("🎙️ Gemini Voice & Web Chatbot")
+st.write("Talk or type! Your voice features are fully integrated.")
 
-recognizer = sr.Recognizer()
+# Initialize Gemini Client
 client = genai.Client()
-chat = client.chats.create(model="gemini-2.5-flash")
 
-LOG_FILE = "conversation_log.txt"
+# Initialize Text-to-Speech Engine
+@st.cache_resource
+def get_tts_engine():
+    engine = pyttsx3.init()
+    return engine
 
-def log_conversation(role, message):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {role}: {message}\n")
+tts_engine = get_tts_engine()
 
 def speak_text(text):
+    # This keeps your bot speaking out loud
     tts_engine.say(text)
     tts_engine.runAndWait()
 
-def listen_to_mic():
+# Initialize Chat Session History
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display past chat bubbles
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Create a sidebar button for Voice Input
+st.sidebar.title("Voice Control")
+if st.sidebar.button("🎙️ Click to Speak"):
+    recognizer = sr.Recognizer()
     with sr.Microphone() as source:
-        print("\n[Listening... Speak into your microphone]")
-        recognizer.adjust_for_ambient_noise(source, duration=0.5)
+        st.sidebar.info("Listening... Speak into your microphone.")
         try:
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
-            print("[Processing speech...]")
-            text = recognizer.recognize_google(audio)
-            print(f"You (Spoke): {text}")
-            return text
-        except sr.WaitTimeoutError:
-            print("No speech detected (Timeout).")
-            return None
-        except sr.UnknownValueError:
-            print("Could not understand the audio.")
-            return None
-        except Exception as e:
-            print(f"Error capturing audio: {e}")
-            return None
-
-print("==================================================")
-print("Interactive Voice & Text Chatbot Initialized")
-print("==================================================")
-print("Instructions: Type your message normally OR press Enter empty to use Voice.")
-print("Type 'exit' or 'quit' to close the app.\n")
-
-while True:
-    user_input = input("You (Type or press Enter for Voice): ").strip()
-    
-    if user_input.lower() in ['exit', 'quit']:
-        print("Goodbye!")
-        break
-        
-    if user_input == "":
-        user_input = listen_to_mic()
-        if not user_input:
-            continue
+            audio = recognizer.listen(source, timeout=5)
+            st.sidebar.success("Processing voice...")
+            user_voice_text = recognizer.recognize_google(audio)
             
-    log_conversation("User", user_input)
+            # Insert the voice text into the input flow
+            st.session_state.voice_input = user_voice_text
+        except Exception as e:
+            st.sidebar.error("Could not understand audio or microphone timed out.")
+
+# Determine input source (either typed or spoken)
+user_input = st.chat_input("Type your message here...")
+if "voice_input" in st.session_state and st.session_state.voice_input:
+    user_input = st.session_state.voice_input
+    del st.session_state.voice_input  # Clear it for the next round
+
+# Process the message if we have input
+if user_input:
+    # 1. Display user message
+    with st.chat_message("user"):
+        st.markdown(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
     
-    try:
-        response = chat.send_message(user_input)
-        reply_text = response.text
-        
-        print(f"\nGemini: {reply_text}\n")
-        log_conversation("Gemini", reply_text)
-        speak_text(reply_text)
-        
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    # 2. Get AI Response
+    with st.chat_message("assistant"):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=user_input
+            )
+            bot_response = response.text
+            st.markdown(bot_response)
+            st.session_state.messages.append({"role": "assistant", "content": bot_response})
+            
+            # 3. Speak the response out loud!
+            speak_text(bot_response)
+            
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
