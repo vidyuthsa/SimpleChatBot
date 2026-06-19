@@ -17,7 +17,7 @@ except Exception:
 
 recognizer = sr.Recognizer()
 client = genai.Client()
-chat = client.chats.create(model="gemini-1.5-flash")
+chat = client.chats.create(model="gemini-2.5-flash")
 
 LOG_FILE = "conversation_log.txt"
 
