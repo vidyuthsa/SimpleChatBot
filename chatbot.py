@@ -5,30 +5,24 @@ import pyttsx3
 import os
 import threading
 from datetime import datetime
-from dotenv import load_dotenv
 
-# --- CRITICAL SECURITY UPGRADE ---
-load_dotenv()
-
-# Get the key explicitly from the file
-api_key = os.getenv("GEMINI_API_KEY")
-
-if not api_key:
-    st.error("🔒 Security Alert: GEMINI_API_KEY missing from your local '.env' file!")
+# --- DIRECT API KEY CONFIGURATION ---
+# Paste your fresh API key string directly between the quotes below:
+GEMINI_API_KEY = "PLACEHOLDER"
+# ------------------------------------
 
 # Initialize Page UI Configuration
 st.set_page_config(page_title="Gemini Pro Chatbot", page_icon="🚀", layout="wide")
 st.title("🚀 Advanced Gemini Voice & Web Hub")
-st.write("An optimized B.Tech project featuring context memory, file logging, and secure credential handling.")
+st.write("An optimized B.Tech project featuring context memory, file logging, and direct credential handling.")
 
 # --- PERSISTENT CLIENT & CHAT SETUP ---
 @st.cache_resource
-def get_gemini_client(key_string):
-    # Passing the key explicitly inside the constructor forces it to ignore old terminal state
-    return genai.Client(api_key=key_string)
+def get_gemini_client(key):
+    # Passing the key explicitly bypasses any auto-detection confusion
+    return genai.Client(api_key=key)
 
-# Pass the key into the cached function
-client = get_gemini_client(api_key)
+client = get_gemini_client(GEMINI_API_KEY)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -41,9 +35,10 @@ if "chat_session" not in st.session_state:
 # Sidebar Controls Configuration
 st.sidebar.title("⚙️ Control Panel")
 
-# OPTION 0: CLEAR CHAT LOGIC
+# CLEAR CHAT LOGIC
 if st.sidebar.button("🗑️ Clear Conversation", use_container_width=True):
     st.session_state.messages = []
+    # Re-instantiate the session to clear memory history on Gemini's backend too
     st.session_state.chat_session = client.chats.create(model="gemini-2.5-flash")
     st.rerun()
 
@@ -123,14 +118,16 @@ for message in st.session_state.messages:
 user_input = st.chat_input("Type your message here...")
 if "voice_input" in st.session_state and st.session_state.voice_input:
     user_input = st.session_state.voice_input
-    del st.session_state.voice_input
+    del st.session_state.voice_input  # Clear queue
 
 # Process the message if we have input
 if user_input:
+    # 1. Display user message in UI
     with st.chat_message("user"):
         st.markdown(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
     
+    # 2. Get AI Response via the persistent Chat Session
     with st.chat_message("assistant"):
         try:
             response = st.session_state.chat_session.send_message(user_input)
@@ -139,10 +136,12 @@ if user_input:
             st.markdown(bot_response)
             st.session_state.messages.append({"role": "assistant", "content": bot_response})
             
+            # 3. File Logging
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open("chat_history.txt", "a") as f:
                 f.write(f"[{timestamp}]\nUser: {user_input}\nBot: {bot_response}\n{'-'*50}\n\n")
 
+            # 4. Speak response out loud
             speak_text(bot_response)
             
         except Exception as e:
